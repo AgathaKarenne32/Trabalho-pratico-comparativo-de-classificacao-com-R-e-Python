@@ -1,13 +1,41 @@
-Version: 1.0
+# Instale os pacotes se não os tiver no seu RStudio: install.packages(c("e1071", "caret"))
+install.packages(c("e1071", "caret"))
+library(e1071)
+library(caret)
 
-RestoreWorkspace: Default
-SaveWorkspace: Default
-AlwaysSaveHistory: Default
 
-EnableCodeIndexing: Yes
-UseSpacesForTab: Yes
-NumSpacesForTab: 2
-Encoding: UTF-8
+# 1. Carregando a base de dados
+df <- read.csv("UCI_Credit_Card.csv")
 
-RnwWeave: Sweave
-LaTeX: pdfLaTeX
+# 2. Pré-processamento básico
+# Removendo a coluna ID, se ela existir
+if("ID" %in% colnames(df)) {
+  df$ID <- NULL
+}
+
+# Renomeando a variável alvo para facilitar e transformando em Fator (Fator é obrigatório no R para classificação)
+colnames(df)[colnames(df) == "default.payment.next.month"] <- "inadimplente"
+df$inadimplente <- as.factor(df$inadimplente)
+
+# 3. Divisão entre Treino e Teste
+# Fixando a semente aleatória
+set.seed(42)
+
+# Usando createDataPartition para manter a proporção das classes (70% treino, 30% teste)
+indice_treino <- createDataPartition(df$inadimplente, p = 0.7, list = FALSE)
+treino <- df[indice_treino, ]
+teste <- df[-indice_treino, ]
+
+# 4. Treinamento do Modelo Naive Bayes
+# O til (~) indica que "inadimplente" será prevista usando todas as outras variáveis (.)
+modelo_nb <- naiveBayes(inadimplente ~ ., data = treino)
+
+# 5. Previsões
+previsoes <- predict(modelo_nb, newdata = teste)
+
+# 6. Avaliação e Métricas Exigidas
+# O positive = "1" avisa ao R que estamos tentando prever quem é o inadimplente (classe 1)
+resultados <- confusionMatrix(previsoes, teste$inadimplente, positive = "1", mode = "prec_recall")
+
+print("=== Resultados Naive Bayes (R) ===")
+print(resultados)
