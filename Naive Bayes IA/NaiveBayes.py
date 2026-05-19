@@ -5,7 +5,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, r
 
 # 1. Carregando a base de dados 
 # (Baixe do Kaggle e coloque o arquivo CSV na mesma pasta do seu script)
-df = pd.read_csv('UCI_Credit_Card.csv')
+df = pd.read_csv('../data/UCI_Credit_Card.csv')
 
 # 2. Pré-processamento básico
 # A base costuma vir com uma coluna 'ID' que não ajuda na previsão, vamos retirá-la
