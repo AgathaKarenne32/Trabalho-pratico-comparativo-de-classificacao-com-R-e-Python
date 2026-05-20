@@ -14,7 +14,7 @@ from sklearn.metrics import (
 SEED = 42
 np.random.seed(SEED)
 
-df = pd.read_csv('...data/UCI_Credit_Card.csv')
+df = pd.read_csv('../data/UCI_Credit_Card.csv')
 
 print("=" * 60)
 print("INSPEÇÃO INICIAL")

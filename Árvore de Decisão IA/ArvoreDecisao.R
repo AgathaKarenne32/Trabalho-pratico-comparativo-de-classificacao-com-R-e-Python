@@ -1,24 +1,22 @@
-# ── Instalar pacotes (execute uma vez) ───────────────────────
-# install.packages(c("rpart", "rpart.plot", "caret", "pROC", "ggplot2", "dplyr"))
+# ==============================================================================
+# Disciplina de Ciência de Dados
+# Solução: Árvore de Decisão de Forma Nativa (R Base)
+# ==============================================================================
 
+# Carrega apenas o pacote obrigatório de modelagem (já nativo do sistema)
 library(rpart)       
-library(rpart.plot)  
-library(caret)       
-library(pROC)        
-library(ggplot2)
-library(dplyr)
 
+# Semente aleatória para reprodutibilidade
 set.seed(42)
-
 
 cat("======================================================\n")
 cat("INSPEÇÃO INICIAL\n")
 cat("======================================================\n")
 
-df <- read.csv('...data/UCI_Credit_Card.csv', stringsAsFactors = FALSE)
+# 1. Carregando a base de dados com caminho relativo corrigido
+df <- read.csv('../data/UCI_Credit_Card.csv', stringsAsFactors = FALSE)
 
 cat("Dimensões:", dim(df), "\n")
-cat("\nColunas:\n"); print(names(df))
 cat("\nDistribuição da variável alvo:\n")
 print(table(df$default.payment.next.month))
 cat("\nProporção (%):\n")
@@ -29,22 +27,26 @@ cat("\n======================================================\n")
 cat("PRÉ-PROCESSAMENTO\n")
 cat("======================================================\n")
 
+# Remove a coluna ID
 df$ID <- NULL
 
+# Renomeia a variável alvo para o padrão
 names(df)[names(df) == "default.payment.next.month"] <- "default"
 
-df$default <- factor(df$default,
-                     levels = c(0, 1),
-                     labels = c("NaoInadim", "Inadim"))
+# Transforma a variável alvo em Fator (necessário para classificação no R)
+df$default <- factor(df$default, levels = c(0, 1), labels = c("NaoInadim", "Inadim"))
 
 cat("Valores ausentes:", sum(is.na(df)), "\n")
 cat("Observações finais:", nrow(df), "\n")
 cat("Atributos:", ncol(df) - 1, "\n")
 
 
-idx    <- createDataPartition(df$default, p = 0.80, list = FALSE)
-treino <- df[ idx, ]
-teste  <- df[-idx, ]
+# 3. Divisão entre Treino (80%) e Teste (20%) de Forma Nativa
+tamanho_treino <- floor(0.80 * nrow(df))
+indices_treino <- sample(seq_len(nrow(df)), size = tamanho_treino)
+
+treino <- df[ indices_treino, ]
+teste  <- df[-indices_treino, ]
 
 cat(sprintf("\nTreino : %d registros\n", nrow(treino)))
 cat(sprintf("Teste  : %d registros\n",  nrow(teste)))
@@ -67,6 +69,7 @@ arvore <- rpart(
   )
 )
 
+# Poda estrutural da árvore baseada no menor erro de complexidade
 cp_otimo <- arvore$cptable[which.min(arvore$cptable[, "xerror"]), "CP"]
 cat(sprintf("CP ótimo (menor xerror): %.6f\n", cp_otimo))
 
@@ -77,96 +80,54 @@ cat(sprintf("Número de nós terminais (folhas): %d\n",
 
 
 cat("\n======================================================\n")
-cat("AVALIAÇÃO NO CONJUNTO DE TESTE\n")
+cat("AVALIAÇÃO NO CONJUNTO DE TESTE (MÉTRICAS OBRIGATÓRIAS)\n")
 cat("======================================================\n")
 
+# Previsões de classe
 y_pred <- predict(arvore_podada, teste, type = "class")
-y_prob <- predict(arvore_podada, teste, type = "prob")[, "Inadim"]
 y_real <- teste$default
 
-cm  <- confusionMatrix(y_pred, y_real, positive = "Inadim")
-acc  <- cm$overall["Accuracy"]
-prec <- cm$byClass["Precision"]
-rec  <- cm$byClass["Recall"]
-f1   <- cm$byClass["F1"]
+# Construção da Matriz de Confusão nativa
+matriz_confusao <- table(Previsso = y_pred, Real = y_real)
 
-roc_obj <- roc(y_real, y_prob, quiet = TRUE)
-auc_val <- as.numeric(auc(roc_obj))
+cat("\nMatriz de Confusão:\n")
+print(matriz_confusao)
 
-cat(sprintf("\n  Acurácia:  %.4f (%.2f%%)\n", acc, acc * 100))
-cat(sprintf("  Precisão:  %.4f\n", prec))
-cat(sprintf("  Revocação: %.4f\n", rec))
-cat(sprintf("  F1-score:  %.4f\n", f1))
-cat(sprintf("  AUC-ROC:   %.4f\n", auc_val))
-cat("\n  Matriz de Confusão:\n")
-print(cm$table)
-cat("\n  Relatório completo:\n")
-print(cm)
+# Extração dos componentes para cálculo das fórmulas
+# Alinhado com a classe positiva "Inadim"
+VP <- matriz_confusao["Inadim", "Inadim"]
+VN <- matriz_confusao["NaoInadim", "NaoInadim"]
+FP <- matriz_confusao["Inadim", "NaoInadim"]
+FN <- matriz_confusao["NaoInadim", "Inadim"]
 
-ctrl   <- trainControl(method = "cv", number = 5,
-                       classProbs = TRUE,
-                       summaryFunction = twoClassSummary)
-cv_mod <- train(default ~ ., data = df, method = "rpart",
-                trControl = ctrl, metric = "ROC",
-                tuneLength = 10)
-cat(sprintf("\n  AUC médio (5-fold CV): %.4f\n", max(cv_mod$results$ROC)))
+# Fórmulas matemáticas das métricas exigidas pelo trabalho
+acuracia   <- (VP + VN) / sum(matriz_confusao)
+precisao   <- VP / (VP + FP)
+revocacao  <- VP / (VP + FN)
+f1_score   <- 2 * (precisao * revocacao) / (precisao + revocacao)
+
+cat("\n--- Relatório Comparativo Final ---\n")
+cat(sprintf("Acurácia  : %.4f (%.2f%%)\n", acuracia, acuracia * 100))
+cat(sprintf("Precisão  : %.4f\n", precisao))
+cat(sprintf("Revocação : %.4f\n", revocacao))
+cat(sprintf("F1-Score  : %.4f\n", f1_score))
 
 
 cat("\n======================================================\n")
-cat("IMPORTÂNCIA DAS VARIÁVEIS\n")
+cat("IMPORTÂNCIA DAS VARIÁVEIS (NATIVO)\n")
 cat("======================================================\n")
 
-imp <- arvore_podada$variable.importance
-if (length(imp) > 0) {
+importancia <- arvore_podada$variable.importance
+if (length(importancia) > 0) {
   imp_df <- data.frame(
-    variavel    = names(imp),
-    importancia = as.numeric(imp)
-  ) %>% arrange(desc(importancia))
-  print(imp_df)
+    Variavel = names(importancia),
+    Importancia = as.numeric(importancia)
+  )
+  # Ordena de forma decrescente
+  imp_df <- imp_df[order(-imp_df$Importancia), ]
+  print(head(imp_df, 10))
 } else {
   cat("Nenhuma variável com importância registrada.\n")
 }
 
-
-png("arvore_decisao_R.png", width = 1400, height = 700, res = 120)
-rpart.plot(
-  arvore_podada,
-  type    = 4,       
-  extra   = 104,     
-  fallen.leaves = TRUE,
-  main    = "Árvore de Decisão (podada) — UCI Credit Card (R)",
-  cex     = 0.75
-)
-dev.off()
-cat("\n✔ arvore_decisao_R.png salvo.\n")
-
-if (length(imp) > 0) {
-  top_imp <- head(imp_df, 10)
-  top_imp$variavel <- factor(top_imp$variavel,
-                             levels = top_imp$variavel[order(top_imp$importancia)])
-  p <- ggplot(top_imp, aes(x = variavel, y = importancia)) +
-    geom_col(fill = "steelblue") +
-    coord_flip() +
-    labs(title = "Top Variáveis — Árvore de Decisão (R)",
-         x = NULL, y = "Importância") +
-    theme_minimal(base_size = 13)
-  ggsave("importancia_dt_R.png", p, width = 8, height = 5, dpi = 150)
-  cat("✔ importancia_dt_R.png salvo.\n")
-}
-
-png("roc_dt_R.png", width = 700, height = 600, res = 120)
-plot(roc_obj,
-     main = sprintf("Curva ROC — Árvore de Decisão (R)  AUC = %.3f", auc_val),
-     col  = "steelblue", lwd = 2,
-     xlab = "Taxa de Falso Positivo",
-     ylab = "Taxa de Verdadeiro Positivo (Revocação)")
-abline(0, 1, lty = 2, col = "gray60")
-dev.off()
-cat("✔ roc_dt_R.png salvo.\n")
-
-png("cp_table_R.png", width = 700, height = 500, res = 120)
-plotcp(arvore, main = "Complexidade vs. Erro — Árvore de Decisão (R)")
-dev.off()
-cat("✔ cp_table_R.png salvo.\n")
-
-cat("\n✔ Execução concluída com sucesso.\n")
+cat("\n✔ Execução concluída com sucesso sem dependências externas.\n")
